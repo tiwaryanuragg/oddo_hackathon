@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+#data
+.data/
+
+# local tool metadata and secrets
+.claude/
+.DS_Store
