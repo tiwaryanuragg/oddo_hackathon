@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Ensure native controls (selects, date pickers, scrollbars) render dark */
+  color-scheme: dark;
+
+  /* Dark Tech Minimalist Palette */
+  --bg-pure-black: #000000;
+  --bg-dark-grey: #0a0a0a;
+  --bg-panel-1: #111111;
+  --bg-panel-2: #1a1a1a;
+  --bg-panel-3: #222222;
+  
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-tertiary: #555555;
+  
+  --tech-border: rgba(255, 255, 255, 0.12);
+  --tech-border-light: rgba(255, 255, 255, 0.25);
+  
+  /* Legacy/Dashboard Compatibility Variables */
+  --background: var(--bg-pure-black);
+  --card: var(--bg-panel-1);
+  --elevated: var(--bg-panel-2);
+  --border: var(--tech-border);
+  --accent-primary: #ffffff;
+  --accent-primary-hover: #cccccc;
+  --accent-secondary: var(--bg-panel-3);
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
+}
+
+body {
+  background-color: var(--bg-pure-black);
+  color: var(--text-primary);
+  font-family: 'Space Grotesk', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Legacy Dashboard Utilities */
+.glass {
+  background: var(--card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+}
+.glass-elevated {
+  background: var(--elevated);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+}
+
+/* Wide Headers */
+.font-wide {
+  font-family: 'Syncopate', sans-serif;
+  text-transform: uppercase;
+}
+
+/* Tech Grid Utility */
+.tech-grid {
+  background-image: 
+    linear-gradient(var(--tech-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tech-border) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: center center;
+}
+
+/* Subtle abstract wireframe waves (pure CSS trick) */
+.wireframe-wave {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--tech-border);
+  opacity: 0.5;
+}
+
+/* Chrome Blob gradient text effect for fallback */
+.chrome-text {
+  background: linear-gradient(180deg, #FFFFFF 0%, #888888 50%, #222222 51%, #AAAAAA 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Borders */
+.border-tech {
+  border: 1px solid var(--tech-border);
+}
+.border-tech-b {
+  border-bottom: 1px solid var(--tech-border);
+}
+.border-tech-t {
+  border-top: 1px solid var(--tech-border);
+}
+.border-tech-x {
+  border-left: 1px solid var(--tech-border);
+  border-right: 1px solid var(--tech-border);
+}
+.border-tech-y {
+  border-top: 1px solid var(--tech-border);
+  border-bottom: 1px solid var(--tech-border);
+}
+
+/* Buttons */
+.btn-tech {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  border: 1px solid var(--tech-border-light);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.btn-tech:hover {
+  background: var(--text-primary);
+  color: var(--bg-pure-black);
+}
+
+.btn-tech-solid {
+  background: var(--text-primary);
+  color: var(--bg-pure-black);
+  border: 1px solid var(--text-primary);
+}
+
+.btn-tech-solid:hover {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+/* ---------------------------------------------------------------------------
+   Core form + button primitives.
+   These classes are referenced throughout the app (.input-field, .btn,
+   .btn-primary) but had no definitions, which left inputs/buttons unstyled
+   and native <select> popups rendering black-on-black. Defined inside
+   @layer components so Tailwind utility classes (pl-10, w-full, bg-*, etc.)
+   applied alongside them still win.
+--------------------------------------------------------------------------- */
+@layer components {
+  .input-field {
+    display: block;
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background-color: var(--bg-panel-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    line-height: 1.4;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    outline: none;
+  }
+  .input-field::placeholder {
+    color: var(--text-tertiary);
+  }
+  .input-field:hover:not(:disabled) {
+    border-color: var(--tech-border-light);
+  }
+  .input-field:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  }
+  .input-field:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: inherit;
+    line-height: 1.25rem;
+    color: var(--text-primary);
+    background-color: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background-color: #6366f1;
+    color: #ffffff;
+    border-color: #6366f1;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #4f46e5;
+    border-color: #4f46e5;
+  }
+}
+
+/* Native <select> dropdown popup: force readable dark options (fixes the
+   black-on-black dropdown seen on Windows/Chrome). Kept outside the layer so
+   it reliably applies to option elements the browser renders natively. */
+select.input-field,
+select {
+  cursor: pointer;
+}
+select option,
+select optgroup {
+  background-color: var(--bg-panel-2);
+  color: var(--text-primary);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-pure-black);
+  border-left: 1px solid var(--tech-border);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
