@@ -1,0 +1,28 @@
+/**
+ * Stable, machine-readable error codes. The web client switches on these, so
+ * they are part of the public API contract — add, don't rename.
+ */
+export const ErrorCode = {
+  // Generic
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  INTERNAL: 'INTERNAL',
+  RATE_LIMITED: 'RATE_LIMITED',
+
+  // Auth
+  AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
+  AUTH_UNAUTHENTICATED: 'AUTH_UNAUTHENTICATED',
+  AUTH_FORBIDDEN: 'AUTH_FORBIDDEN',
+  AUTH_TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
+  AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
+  AUTH_ACCOUNT_INACTIVE: 'AUTH_ACCOUNT_INACTIVE',
+
+  // Domain
+  ASSET_NOT_AVAILABLE: 'ASSET_NOT_AVAILABLE',
+  ALLOCATION_CONFLICT: 'ALLOCATION_CONFLICT',
+  BOOKING_CONFLICT: 'BOOKING_CONFLICT',
+  INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
+} as const;
+
+export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -1,0 +1,23 @@
+:root {
+  color-scheme: light dark;
+  --af-bg: #ffffff;
+  --af-fg: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--af-bg);
+  color: var(--af-fg);
+  -webkit-font-smoothing: antialiased;
+}

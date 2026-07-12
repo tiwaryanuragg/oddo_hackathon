@@ -1,0 +1,728 @@
+// AssetFlow — Prisma schema
+// PostgreSQL. This file is the authoritative database design for every module.
+// Conventions:
+//   * cuid() primary keys (collision-resistant, URL-safe, sortable-ish)
+//   * snake_case table names via @@map, camelCase fields in code
+//   * every mutable business table carries createdAt / updatedAt
+//   * soft references to "actor" users are RESTRICT to preserve audit trails;
+//     ownership links (e.g. asset.assignedTo) are SetNull so history survives
+//   * indexes are declared on every foreign key and on hot filter columns
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ENUMS  (mirrored in packages/shared/src/enums.ts)
+// ═══════════════════════════════════════════════════════════
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  AUDITOR
+  TECHNICIAN
+  EMPLOYEE
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AssetStatus {
+  DRAFT
+  AVAILABLE
+  RESERVED
+  ALLOCATED
+  IN_MAINTENANCE
+  UNDER_AUDIT
+  RETIRED
+  LOST
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AssetEventType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  ALLOCATED
+  TRANSFERRED
+  RETURNED
+  BOOKED
+  MAINTENANCE_STARTED
+  MAINTENANCE_COMPLETED
+  AUDITED
+  RETIRED
+}
+
+enum AllocationStatus {
+  ACTIVE
+  RETURN_REQUESTED
+  RETURNED
+  OVERDUE
+  REVOKED
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  RESCHEDULED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum MaintenanceStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AuditCycleStatus {
+  DRAFT
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AuditRecordStatus {
+  PENDING
+  VERIFIED
+  DISCREPANCY
+  MISSING
+}
+
+enum DiscrepancyType {
+  LOCATION_MISMATCH
+  CONDITION_MISMATCH
+  OWNERSHIP_MISMATCH
+  MISSING_ASSET
+  UNREGISTERED_ASSET
+}
+
+enum DiscrepancySeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationType {
+  ALLOCATION
+  TRANSFER_REQUEST
+  RETURN
+  BOOKING
+  BOOKING_REMINDER
+  MAINTENANCE
+  AUDIT
+  ROLE_CHANGE
+  SYSTEM
+}
+
+// ═══════════════════════════════════════════════════════════
+//  IDENTITY & ORGANIZATION
+// ═══════════════════════════════════════════════════════════
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  avatarUrl    String?
+  role         Role       @default(EMPLOYEE)
+  status       UserStatus @default(PENDING)
+
+  departmentId String?
+  department   Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+
+  jobTitle    String?
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Auth
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+
+  // Org
+  managedDepartments Department[] @relation("DepartmentManager")
+
+  // Assets / allocations
+  registeredAssets   Asset[]      @relation("AssetRegisteredBy")
+  ownedAssets        Asset[]      @relation("AssetAssignedTo")
+  assetEvents        AssetEvent[] @relation("AssetEventActor")
+  allocationsHeld    Allocation[] @relation("AllocationHolder")
+  allocationsIssued  Allocation[] @relation("AllocationIssuer")
+
+  // Transfers
+  transfersRequested TransferRequest[] @relation("TransferRequester")
+  transfersFrom      TransferRequest[] @relation("TransferFrom")
+  transfersTo        TransferRequest[] @relation("TransferTo")
+  transfersDecided   TransferRequest[] @relation("TransferApprover")
+
+  // Returns
+  returnsSubmitted Return[] @relation("ReturnSubmitter")
+  returnsProcessed Return[] @relation("ReturnProcessor")
+
+  // Booking
+  bookings Booking[] @relation("BookingOwner")
+
+  // Maintenance
+  maintenanceReported  MaintenanceRequest[] @relation("MaintenanceReporter")
+  maintenanceApproved  MaintenanceRequest[] @relation("MaintenanceApprover")
+  maintenanceAssigned  MaintenanceRequest[] @relation("MaintenanceTechnician")
+
+  // Audit
+  auditCyclesCreated AuditCycle[]      @relation("AuditCycleCreator")
+  auditAssignments   AuditAssignment[] @relation("AuditAssignmentAuditor")
+  auditRecords       AuditRecord[]     @relation("AuditRecordAuditor")
+
+  // Cross-cutting
+  notifications Notification[] @relation("NotificationRecipient")
+  activityLogs  ActivityLog[]  @relation("ActivityActor")
+  roleChanges   RoleChangeLog[] @relation("RoleChangeTarget")
+  roleChangesBy RoleChangeLog[] @relation("RoleChangeActor")
+
+  @@index([departmentId])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Department {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  code        String  @unique
+  description String?
+
+  managerId String?
+  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  members User[]  @relation("DepartmentMembers")
+  assets  Asset[] @relation("AssetDepartment")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([managerId])
+  @@map("departments")
+}
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  // Self-referential tree for sub-categories (e.g. IT > Laptops > Ultrabooks)
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+
+  // Defaults inherited by assets on creation
+  defaultDepreciationRate Decimal? @db.Decimal(5, 2) // annual %, straight-line
+  defaultUsefulLifeMonths Int?
+
+  assets Asset[] @relation("AssetCategory")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════════════════
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Store a hash of the token, never the token itself.
+  tokenHash String   @unique
+  // Rotation chain: when a token is used, it is revoked and points at its successor.
+  revokedAt DateTime?
+  replacedById String?
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ASSETS
+// ═══════════════════════════════════════════════════════════
+
+model Asset {
+  id          String         @id @default(cuid())
+  // Human-facing unique tag e.g. AST-2026-0001 (generated on registration)
+  assetTag    String         @unique
+  name        String
+  description String?
+  status      AssetStatus    @default(DRAFT)
+  condition   AssetCondition @default(NEW)
+
+  serialNumber String? @unique
+  manufacturer String?
+  model        String?
+  location     String?
+
+  purchaseDate DateTime?
+  purchaseCost Decimal?  @db.Decimal(12, 2)
+  currentValue Decimal?  @db.Decimal(12, 2)
+  warrantyExpiry DateTime?
+
+  // QR payload resolves to /assets/{id}; image cached at qrCodeUrl
+  qrCodeUrl String?
+
+  categoryId String
+  category   Category @relation("AssetCategory", fields: [categoryId], references: [id], onDelete: Restrict)
+
+  departmentId String?
+  department   Department? @relation("AssetDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+
+  // Current custodian (denormalized for fast "my assets" queries; the
+  // authoritative allocation record lives in Allocation).
+  assignedToId String?
+  assignedTo   User?   @relation("AssetAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  registeredById String
+  registeredBy   User   @relation("AssetRegisteredBy", fields: [registeredById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events              AssetEvent[]
+  allocations         Allocation[]
+  transferRequests    TransferRequest[]
+  bookings            Booking[]
+  maintenanceRequests MaintenanceRequest[]
+  auditRecords        AuditRecord[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([departmentId])
+  @@index([assignedToId])
+  @@index([condition])
+  @@map("assets")
+}
+
+// Immutable, append-only ledger of everything that happened to an asset.
+model AssetEvent {
+  id        String         @id @default(cuid())
+  assetId   String
+  asset     Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  type      AssetEventType
+  fromStatus AssetStatus?
+  toStatus   AssetStatus?
+  note      String?
+  // Structured context (e.g. { allocationId, toUserId }) for rich history views.
+  metadata  Json?
+
+  actorId String?
+  actor   User?  @relation("AssetEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("asset_events")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  ALLOCATION / TRANSFER / RETURN
+// ═══════════════════════════════════════════════════════════
+
+model Allocation {
+  id       String           @id @default(cuid())
+  assetId  String
+  asset    Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  status   AllocationStatus @default(ACTIVE)
+
+  holderId String
+  holder   User   @relation("AllocationHolder", fields: [holderId], references: [id], onDelete: Restrict)
+
+  issuedById String
+  issuedBy   User   @relation("AllocationIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+
+  allocatedAt DateTime  @default(now())
+  dueDate     DateTime?
+  returnedAt  DateTime?
+  note        String?
+
+  transferRequests TransferRequest[]
+  returns          Return[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assetId])
+  @@index([holderId])
+  @@index([status])
+  // Enforced in application logic + partial unique index (migration): only one
+  // ACTIVE allocation may exist per asset. Documented here for the reader.
+  @@map("allocations")
+}
+
+model TransferRequest {
+  id           String         @id @default(cuid())
+  assetId      String
+  asset        Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  allocationId String?
+  allocation   Allocation?    @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+  status       TransferStatus @default(PENDING)
+
+  fromUserId String
+  fromUser   User   @relation("TransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUserId   String
+  toUser     User   @relation("TransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
+
+  requestedById String
+  requestedBy   User   @relation("TransferRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  approverId String?
+  approver   User?   @relation("TransferApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  reason        String?
+  decisionNote  String?
+  decidedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assetId])
+  @@index([toUserId])
+  @@index([status])
+  @@map("transfer_requests")
+}
+
+model Return {
+  id           String       @id @default(cuid())
+  allocationId String
+  allocation   Allocation   @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  status       ReturnStatus @default(REQUESTED)
+
+  submittedById String
+  submittedBy   User   @relation("ReturnSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+
+  processedById String?
+  processedBy   User?   @relation("ReturnProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  reportedCondition AssetCondition
+  note              String?
+  decidedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([allocationId])
+  @@index([status])
+  @@map("returns")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RESOURCE BOOKING
+// ═══════════════════════════════════════════════════════════
+
+model Booking {
+  id      String        @id @default(cuid())
+  assetId String
+  asset   Asset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  status  BookingStatus @default(PENDING)
+
+  ownerId String
+  owner   User   @relation("BookingOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  startTime DateTime
+  endTime   DateTime
+  purpose   String?
+
+  // Reminder bookkeeping for the Phase 6 scheduler.
+  reminderSentAt DateTime?
+
+  cancelledAt   DateTime?
+  cancelReason  String?
+  rescheduledFromId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assetId, startTime, endTime])
+  @@index([ownerId])
+  @@index([status])
+  @@map("bookings")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAINTENANCE
+// ═══════════════════════════════════════════════════════════
+
+model MaintenanceRequest {
+  id       String              @id @default(cuid())
+  assetId  String
+  asset    Asset               @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  status   MaintenanceStatus   @default(REQUESTED)
+  priority MaintenancePriority @default(MEDIUM)
+
+  title       String
+  description String
+
+  reportedById String
+  reportedBy   User   @relation("MaintenanceReporter", fields: [reportedById], references: [id], onDelete: Restrict)
+
+  approvedById String?
+  approvedBy   User?   @relation("MaintenanceApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  technicianId String?
+  technician   User?   @relation("MaintenanceTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+
+  cost           Decimal? @db.Decimal(12, 2)
+  resolutionNote String?
+
+  approvedAt  DateTime?
+  assignedAt  DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logs MaintenanceLog[]
+
+  @@index([assetId])
+  @@index([status])
+  @@index([technicianId])
+  @@index([priority])
+  @@map("maintenance_requests")
+}
+
+// Progress-tracking timeline for a maintenance request.
+model MaintenanceLog {
+  id        String             @id @default(cuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  authorId  String?
+  message   String
+  // Optional status snapshot at time of log entry.
+  status    MaintenanceStatus?
+  createdAt DateTime           @default(now())
+
+  @@index([requestId])
+  @@map("maintenance_logs")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  AUDIT
+// ═══════════════════════════════════════════════════════════
+
+model AuditCycle {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  status      AuditCycleStatus @default(DRAFT)
+
+  startDate DateTime
+  endDate   DateTime
+
+  createdById String
+  createdBy   User   @relation("AuditCycleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments AuditAssignment[]
+  records     AuditRecord[]
+
+  @@index([status])
+  @@map("audit_cycles")
+}
+
+// Scopes a portion of the audit (a department) to a specific auditor.
+model AuditAssignment {
+  id           String     @id @default(cuid())
+  auditCycleId String
+  auditCycle   AuditCycle @relation(fields: [auditCycleId], references: [id], onDelete: Cascade)
+
+  auditorId String
+  auditor   User   @relation("AuditAssignmentAuditor", fields: [auditorId], references: [id], onDelete: Restrict)
+
+  // Null departmentId => whole-org scope.
+  departmentId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([auditCycleId, auditorId, departmentId])
+  @@index([auditorId])
+  @@map("audit_assignments")
+}
+
+// One verification line item: "auditor confirmed asset X during cycle Y".
+model AuditRecord {
+  id           String            @id @default(cuid())
+  auditCycleId String
+  auditCycle   AuditCycle        @relation(fields: [auditCycleId], references: [id], onDelete: Cascade)
+  assetId      String
+  asset        Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  status       AuditRecordStatus @default(PENDING)
+
+  auditorId String?
+  auditor   User?   @relation("AuditRecordAuditor", fields: [auditorId], references: [id], onDelete: SetNull)
+
+  // Snapshot of what the auditor actually observed.
+  observedCondition AssetCondition?
+  observedLocation  String?
+  note              String?
+  verifiedAt        DateTime?
+
+  discrepancy DiscrepancyReport?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([auditCycleId, assetId])
+  @@index([status])
+  @@index([assetId])
+  @@map("audit_records")
+}
+
+model DiscrepancyReport {
+  id            String              @id @default(cuid())
+  auditRecordId String              @unique
+  auditRecord   AuditRecord         @relation(fields: [auditRecordId], references: [id], onDelete: Cascade)
+  type          DiscrepancyType
+  severity      DiscrepancySeverity @default(MEDIUM)
+  description   String
+  resolved      Boolean             @default(false)
+  resolvedAt    DateTime?
+  resolutionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resolved])
+  @@map("discrepancy_reports")
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CROSS-CUTTING: NOTIFICATIONS, ACTIVITY, ROLE CHANGES
+// ═══════════════════════════════════════════════════════════
+
+model Notification {
+  id      String           @id @default(cuid())
+  userId  String
+  user    User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  type    NotificationType
+  title   String
+  message String
+  isRead  Boolean          @default(false)
+
+  // Polymorphic pointer to the originating entity for deep-linking.
+  entityType String?
+  entityId   String?
+
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// Append-only activity feed for auditing "who did what".
+model ActivityLog {
+  id      String @id @default(cuid())
+  actorId String?
+  actor   User?  @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  action     String // e.g. "asset.created", "allocation.approved"
+  entityType String
+  entityId   String
+  metadata   Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model RoleChangeLog {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation("RoleChangeTarget", fields: [userId], references: [id], onDelete: Cascade)
+  changedById String
+  changedBy   User @relation("RoleChangeActor", fields: [changedById], references: [id], onDelete: Restrict)
+  fromRole  Role
+  toRole    Role
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("role_change_logs")
+}

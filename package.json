@@ -1,0 +1,34 @@
+{
+  "name": "assetflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AssetFlow — enterprise asset management, allocation, booking, maintenance and audit platform",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @assetflow/api\" \"npm run dev -w @assetflow/web\"",
+    "dev:api": "npm run dev -w @assetflow/api",
+    "dev:web": "npm run dev -w @assetflow/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate -w @assetflow/api",
+    "prisma:migrate": "npm run prisma:migrate -w @assetflow/api",
+    "prisma:seed": "npm run prisma:seed -w @assetflow/api",
+    "db:studio": "npm run db:studio -w @assetflow/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}
